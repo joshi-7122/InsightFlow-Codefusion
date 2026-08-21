@@ -1,13 +1,13 @@
-import ChatFollowUp from "./components/ChatFollowUp";
+import UploadPanel from "./components/UploadPanel";
 
 function App() {
+  function handleFileReady(file) {
+    console.log("File selected:", file);
+  }
+
   return (
-    <div style={{ padding: 40 }}>
-      <h1>InsightFlow — Chat Test</h1>
-      <ChatFollowUp
-        reportId="r1"
-        onChartUpdate={(d) => console.log("new chart data:", d)}
-      />
+    <div style={{ padding: "60px 20px" }}>
+      <UploadPanel onFileReady={handleFileReady} />
     </div>
   );
 }

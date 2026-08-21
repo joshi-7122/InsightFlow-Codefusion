@@ -5,120 +5,94 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-/**
- * Helper to convert File to Base64 string (without Data URI prefix)
- */
-function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = () => {
-      const result = reader.result;
-      const base64Data = typeof result === 'string' ? result.split(',')[1] : '';
-      resolve(base64Data);
-    };
-    reader.onerror = (error) => reject(error);
-  });
-}
+export async function analyzeInput({ files = [], textNote = '', domain = 'general', title, userId }) {
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-/**
- * Analyzes input data (File, text note, or domain context) via Supabase Edge Function
- */
-export async function analyzeInput({ files, file, textNote, domain = 'general', title, userId }) {
-  let rawText = textNote || '';
-  const filePayloads = [];
-
-  const processFile = async (f) => {
-    const isText = f.type.startsWith('text/') || 
-      /\.(csv|txt|json|md|tsv|log)$/i.test(f.name);
-    
-    let content = '';
-    if (isText) {
-      content = await f.text();
-    } else {
-      const b64 = await fileToBase64(f);
-      content = `[Binary/Media File base64 encoded: ${b64.slice(0, 1000)}...]`;
-    }
-
-    return {
-      fileName: f.name,
-      type: f.type,
-      size: f.size,
-      content
-    };
-  };
-
-  // Handle single file (backward compatibility)
-  if (file) {
-    const p = await processFile(file);
-    rawText = rawText ? `${rawText}\n\n${p.content}` : p.content;
-    filePayloads.push(p);
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error('Supabase environment variables (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY) are missing.');
   }
 
-  // Handle multiple files
-  if (files && files.length > 0) {
-    const filePromises = files.map(processFile);
-    filePayloads.push(...await Promise.all(filePromises));
-
-    if (!rawText) {
-      rawText = filePayloads.map(p => `--- File: ${p.fileName} ---\n${p.content}`).join('\n\n');
-    }
-  }
-
-  console.log('Sending payload to analyze-upload Edge Function...');
-  const customHeaders = SUPABASE_ANON_KEY ? {
-    apikey: SUPABASE_ANON_KEY,
-    Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-  } : {};
-
-  const { data, error } = await supabase.functions.invoke('analyze-upload', {
-    body: {
-      rawText,
-      filePayloads,
-      domain,
-      title: title || (files && files.length > 0 ? files.map(f => f.name).join(', ') : file?.name || 'Dataset Analysis'),
-      userId: userId || null
-    },
-    headers: customHeaders
-  });
-
-  if (error) {
-    console.error('Supabase Edge Function invocation failed:', error);
-    let errorMsg = error.message || 'Edge function execution failed';
-    if (error.context && error.context.json) {
+  // Extract content safely and truncate to avoid huge payloads
+  const filePayloads = await Promise.all(
+    files.map(async (f) => {
+      let content = '';
       try {
-        const errJson = await error.context.json();
-        if (errJson?.error) errorMsg = errJson.error;
-      } catch (_) {}
-    }
-    throw new Error(errorMsg);
+        content = await f.text();
+      } catch {
+        content = `[Attached: ${f.name}]`;
+      }
+      return {
+        fileName: f.name,
+        type: f.type,
+        size: f.size,
+        content: content.slice(0, 20000),
+      };
+    })
+  );
+
+  const endpoint = `${supabaseUrl}/functions/v1/analyze-upload`;
+
+  let response;
+  try {
+    response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': supabaseAnonKey,
+        'Authorization': `Bearer ${supabaseAnonKey}`,
+      },
+      body: JSON.stringify({
+        filePayloads,
+        rawText: textNote,
+        domain,
+        title: title || (files.length > 0 ? files.map(f => f.name).join(', ') : 'Quick Analysis'),
+        userId,
+      }),
+    });
+  } catch (netErr) {
+    throw new Error(`Network/CORS blocked the request or the Edge Function timed out. Details: ${netErr.message}`);
   }
 
-  if (data?.error) {
-    throw new Error(data.error);
+  if (!response.ok) {
+    const errBody = await response.text();
+    console.error('Edge Function HTTP error:', response.status, errBody);
+    throw new Error(`Edge Function returned status ${response.status}: ${errBody}`);
   }
 
-  console.log('Live backend data received:', data);
-  return data;
+  return await response.json();
 }
 
 /**
  * Sends a follow-up chat question for a cached report
  */
 export async function sendFollowUpChat({ reportId, message }) {
-  const customHeaders = SUPABASE_ANON_KEY ? {
-    apikey: SUPABASE_ANON_KEY,
-    Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-  } : {};
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+  const endpoint = `${supabaseUrl}/functions/v1/chat-followup`;
 
-  const { data, error } = await supabase.functions.invoke('chat-followup', {
-    body: { reportId, message },
-    headers: customHeaders
-  });
-
-  if (error) {
-    throw error;
+  let response;
+  try {
+    response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': supabaseAnonKey,
+        'Authorization': `Bearer ${supabaseAnonKey}`,
+      },
+      body: JSON.stringify({ reportId, message }),
+    });
+  } catch (netErr) {
+    throw new Error(`Network/CORS blocked the request or the Edge Function timed out. Details: ${netErr.message}`);
   }
+
+  if (!response.ok) {
+    const errBody = await response.text();
+    console.error('Edge Function HTTP error:', response.status, errBody);
+    throw new Error(`Edge Function returned status ${response.status}: ${errBody}`);
+  }
+
+  const data = await response.json();
 
   return {
     answer: data?.answer || data?.response || 'No response generated.',

@@ -3,18 +3,19 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, LineChart, Line
 } from 'recharts';
 import {
-  Sparkles, Plus, Clock, MessageSquare, Settings, User, ChevronDown,
-  FileSpreadsheet, AlertCircle, TrendingUp, Maximize2, Paperclip, Mic, Send, UploadCloud, Loader2, X
+  Sparkles, FileText, Plus, Send, Paperclip, Mic, TrendingUp, AlertTriangle,
+  TrendingDown, User, Settings, Clock, MessageSquare, ChevronDown,
+  FileSpreadsheet, AlertCircle, Maximize2, UploadCloud, Loader2, X, Layers
 } from 'lucide-react';
 import { analyzeInput, sendFollowUpChat } from './lib/api.js';
 
 const REPORTS_DATA = {
   'retail': {
     id: 'retail',
-    title: 'Q3 Retail Revenue Analysis',
+    title: 'Retail & E-commerce Revenue Analysis',
     summary: 'Revenue saw a significant dip in mid-March, primarily driven by the West Coast region. Conversely, profit margins remained relatively stable due to optimized operational costs.',
     metrics: [
-      { label: 'TOTAL REVENURE', value: '$124.5K', change: '+12% YoY', isPositive: true },
+      { label: 'TOTAL REVENUE', value: '$124.5K', change: '+12% YoY', isPositive: true },
       { label: 'CHURN RISK', value: 'High', change: 'Action req.', isPositive: false }
     ],
     charts: [
@@ -128,7 +129,7 @@ const REPORTS_DATA = {
     title: 'Campus Fest Budget & Expense Digest',
     summary: 'Total fest expenditure came in at $42,500 against an approved budget of $45,000. Sponsorship revenue exceeded targets by 15%.',
     metrics: [
-      { label: 'BUDGET REMAINDER', value: '$2.5K', change: 'Under budget', isPositive: true },
+      { label: 'BUDGET REMAINING', value: '$2.5K', change: 'Under budget', isPositive: true },
       { label: 'SPONSORSHIPS', value: '$28.0K', change: '+15% Goal', isPositive: true }
     ],
     charts: [
@@ -160,8 +161,63 @@ const REPORTS_DATA = {
   }
 };
 
+function EmptyWorkspaceHero({ activeWorkspace, onSelectPreset }) {
+  return (
+    <div className="min-h-[70vh] flex flex-col items-center justify-center max-w-5xl mx-auto space-y-8 py-8 px-4 text-center">
+      <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-teal-accent/10 border border-teal-accent/20 text-teal-accent text-xs font-mono">
+        <Sparkles className="w-3.5 h-3.5" />
+        {activeWorkspace ? `Workspace: ${activeWorkspace.name}` : 'AI Decision Intelligence Canvas'}
+      </div>
+      <h1 className="text-4xl md:text-5xl font-heading font-extrabold tracking-tight text-white leading-tight">
+        Point it at your mess. <br />
+        <span className="bg-gradient-to-r from-teal-accent via-teal-300 to-violet-accent bg-clip-text text-transparent">
+          Get a report, not a spreadsheet.
+        </span>
+      </h1>
+      <p className="text-white/60 text-base font-body max-w-xl mx-auto leading-relaxed">
+        Upload raw data, screenshots, or voice notes. InsightFlow synthesizes the noise into actionable insights.
+      </p>
+
+      {/* 4 Interactive Domain Template Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 w-full text-left pt-4">
+        {[
+          { key: 'retail', title: 'Retail & E-commerce', desc: 'SKU stockouts, seasonal revenue dips & regional performance.', icon: TrendingUp },
+          { key: 'saas', title: 'SaaS Metrics', desc: 'ARR trajectory, NRR benchmarks, CAC payback & churn risks.', icon: Layers },
+          { key: 'restaurant', title: 'Restaurant Ops', desc: 'COGS food cost spikes, prime cost loss & wastage alerts.', icon: AlertCircle },
+          { key: 'budget', title: 'Event / Budget', desc: 'Variance tracking, departmental spend & surplus analysis.', icon: FileSpreadsheet },
+        ].map((preset) => {
+          const IconComp = preset.icon;
+          return (
+            <div
+              key={preset.key}
+              onClick={() => onSelectPreset(preset.key)}
+              className="group relative bg-[#171A25]/60 hover:bg-[#171A25] border border-white/10 hover:border-teal-accent/40 rounded-2xl p-5 transition-all duration-300 hover:scale-[1.02] hover:shadow-[0_0_25px_rgba(63,199,181,0.15)] cursor-pointer flex flex-col justify-between"
+            >
+              <div className="space-y-3">
+                <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center group-hover:border-teal-accent/40 transition-colors">
+                  <IconComp className="w-5 h-5 text-white/80 group-hover:text-teal-accent transition-colors" />
+                </div>
+                <h3 className="font-heading font-bold text-base text-white group-hover:text-teal-accent transition-colors">
+                  {preset.title}
+                </h3>
+                <p className="text-xs text-white/50 group-hover:text-white/70 transition-colors leading-relaxed">
+                  {preset.desc}
+                </p>
+              </div>
+              <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between text-[11px] text-white/40 font-mono group-hover:text-teal-accent">
+                <span>Load Template</span>
+                <span>→</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function App() {
-  // User-created Workspaces State Management (strictly for user data)
+  // User-created Workspaces State Management (safely initialized array)
   const [workspaces, setWorkspaces] = useState([]);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState(null);
 
@@ -174,20 +230,23 @@ function App() {
   const [newReportTitle, setNewReportTitle] = useState('');
   const newReportInputRef = useRef(null);
 
-  // Active Workspace & Report computed state
-  const activeWorkspace = workspaces.find(ws => ws.id === activeWorkspaceId);
-  const currentReportToDisplay = previewMode && previewData ? previewData : (activeWorkspace?.data || null);
+  // Error Banner State
+  const [analysisError, setAnalysisError] = useState(null);
+
+  // Active Workspace & Report computed state with safe fallbacks
+  const activeWorkspace = (workspaces || []).find(ws => ws?.id === activeWorkspaceId) || null;
+  const activeReportData = activeWorkspace?.data || null;
+  const currentReportToDisplay = previewMode && previewData ? previewData : activeReportData;
 
   // Analysis State
   const [isLoading, setIsLoading] = useState(false);
   const [inputText, setInputText] = useState('');
   const [isDragging, setIsDragging] = useState(false);
-  const [files, setFiles] = useState([]); // Array of File objects
-  const [analysisError, setAnalysisError] = useState(null); // For error feedback
+  const [files, setFiles] = useState([]);
+  const [analyzingFiles, setAnalyzingFiles] = useState([]);
   const fileInputRef = useRef(null);
-  const [analyzingFiles, setAnalyzingFiles] = useState([]); // Track files being analyzed
 
-  // Keyboard shortcut (Escape) to close modal & autofocus on mount
+  // Keyboard shortcut (Escape) to close modal
   useEffect(() => {
     if (isNewReportModalOpen) {
       setTimeout(() => newReportInputRef.current?.focus(), 50);
@@ -205,12 +264,11 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isNewReportModalOpen]);
 
-  // Check if modal title is a duplicate name
-  const isDuplicateName = workspaces.some(
-    ws => ws.name.toLowerCase() === newReportTitle.trim().toLowerCase()
+  // Check duplicate report names
+  const isDuplicateName = (workspaces || []).some(
+    ws => ws?.name?.toLowerCase() === newReportTitle.trim().toLowerCase()
   );
 
-  // Handle New Report Modal submission
   const handleCreateReport = (e) => {
     if (e) e.preventDefault();
     const trimmed = newReportTitle.trim();
@@ -218,7 +276,7 @@ function App() {
 
     let finalName = trimmed;
     let counter = 2;
-    while (workspaces.some(ws => ws.name.toLowerCase() === finalName.toLowerCase())) {
+    while ((workspaces || []).some(ws => ws?.name?.toLowerCase() === finalName.toLowerCase())) {
       finalName = `${trimmed} (${counter})`;
       counter++;
     }
@@ -227,11 +285,11 @@ function App() {
       id: `workspace-${Date.now()}`,
       name: finalName,
       createdAt: new Date().toISOString(),
-      data: null, // null until files are uploaded and analyzed
+      data: null,
       messages: []
     };
 
-    setWorkspaces(prev => [newWorkspace, ...prev]);
+    setWorkspaces(prev => [newWorkspace, ...(prev || [])]);
     setActiveWorkspaceId(newWorkspace.id);
     setFiles([]);
     setInputText('');
@@ -239,52 +297,103 @@ function App() {
     setIsNewReportModalOpen(false);
     setAnalysisError(null);
 
-    // Exit preview mode if we were in it
     if (previewMode) {
       setPreviewMode(false);
       setPreviewData(null);
     }
   };
 
-  // Unified Workspace Navigation Handler
   const handleSelectWorkspace = (workspaceId) => {
-    const targetWs = workspaces.find((w) => w.id === workspaceId);
+    const targetWs = (workspaces || []).find((w) => w?.id === workspaceId);
     if (!targetWs) return;
 
-    // 1. Set active workspace ID
     setActiveWorkspaceId(workspaceId);
 
-    // 2. Exit preview mode if we were in it
     if (previewMode) {
       setPreviewMode(false);
       setPreviewData(null);
     }
 
-    // 3. Clear temporary omnibar inputs and attached files for clean context
+    setFiles([]);
+    setInputText('');
+    setAnalysisError(null);
+  };
+
+  const handleSelectPreset = (presetKey) => {
+    const preset = REPORTS_DATA[presetKey];
+    if (!preset) return;
+    setPreviewMode(true);
+    setPreviewData(preset);
     setFiles([]);
     setInputText('');
     setAnalysisError(null);
   };
 
   const triggerAnalysis = async (keyOrQuery, fileParam = null) => {
-    // Don't clear files state immediately - keep it for better UX
-    // Instead, track what we're analyzing
     const filesToUpload = files.length > 0 ? [...files] : (fileParam ? [fileParam] : []);
     const queryText = typeof keyOrQuery === 'string' ? keyOrQuery : inputText;
 
-    // Track analyzing files for UI feedback
     setAnalyzingFiles(filesToUpload);
     setAnalysisError(null);
     setIsLoading(true);
 
+    if (previewMode) {
+      setPreviewMode(false);
+      setPreviewData(null);
+    }
+
     try {
+      // Follow-up question on active report
+      if (activeReportData?.id && filesToUpload.length === 0 && queryText && !REPORTS_DATA[queryText]) {
+        try {
+          const chatResult = await sendFollowUpChat({
+            reportId: activeReportData.id,
+            message: queryText
+          });
+
+          if (chatResult) {
+            setWorkspaces(prev => (prev || []).map(ws => {
+              if (ws?.id === activeWorkspaceId) {
+                const updatedData = { ...(ws.data || {}) };
+                if (chatResult.chart_update) {
+                  const existingCharts = [...(updatedData.charts || [])];
+                  const chartIdx = existingCharts.findIndex(c => c?.id === chatResult.chart_update.id);
+                  if (chartIdx >= 0) {
+                    existingCharts[chartIdx] = chatResult.chart_update;
+                  } else {
+                    existingCharts.push(chatResult.chart_update);
+                  }
+                  updatedData.charts = existingCharts;
+                }
+                const updatedMessages = [
+                  ...(ws.messages || []),
+                  { role: 'user', content: queryText },
+                  { role: 'assistant', content: chatResult.answer }
+                ];
+                return {
+                  ...ws,
+                  data: updatedData,
+                  messages: updatedMessages
+                };
+              }
+              return ws;
+            }));
+            setIsLoading(false);
+            setAnalyzingFiles([]);
+            setFiles([]);
+            setInputText('');
+            return;
+          }
+        } catch (chatErr) {
+          console.warn('Follow-up chat failed, falling back to full analysis:', chatErr);
+        }
+      }
+
       let reportToSet = null;
 
-      // Preset domain selection from Hero
       if (typeof keyOrQuery === 'string' && REPORTS_DATA[keyOrQuery] && filesToUpload.length === 0) {
         reportToSet = REPORTS_DATA[keyOrQuery];
       } else {
-        // Direct invocation of backend Edge Function analyze-upload via api.js
         reportToSet = await analyzeInput({
           files: filesToUpload.length > 0 ? filesToUpload : undefined,
           textNote: queryText && !REPORTS_DATA[queryText] ? queryText : '',
@@ -293,13 +402,9 @@ function App() {
       }
 
       if (reportToSet) {
-        if (previewMode) {
-          // In preview mode, just set the preview data
-          setPreviewData(reportToSet);
-        } else if (activeWorkspaceId) {
-          // Update active workspace with synthesized report data
-          setWorkspaces(prev => prev.map(ws => {
-            if (ws.id === activeWorkspaceId) {
+        if (activeWorkspaceId) {
+          setWorkspaces(prev => (prev || []).map(ws => {
+            if (ws?.id === activeWorkspaceId) {
               return {
                 ...ws,
                 data: reportToSet
@@ -308,7 +413,6 @@ function App() {
             return ws;
           }));
         } else {
-          // If no active workspace existed, create one automatically
           const newWs = {
             id: `workspace-${Date.now()}`,
             name: reportToSet.title || (filesToUpload[0] ? filesToUpload[0].name : (queryText.substring(0, 30) || 'New Analysis')),
@@ -316,7 +420,7 @@ function App() {
             data: reportToSet,
             messages: []
           };
-          setWorkspaces(prev => [newWs, ...prev]);
+          setWorkspaces(prev => [newWs, ...(prev || [])]);
           setActiveWorkspaceId(newWs.id);
         }
       }
@@ -326,7 +430,6 @@ function App() {
     } finally {
       setIsLoading(false);
       setAnalyzingFiles([]);
-      // Clear input and files ONLY after analysis completes (success or error)
       setFiles([]);
       setInputText('');
     }
@@ -378,12 +481,11 @@ function App() {
             className="bg-[#171A25] border border-white/15 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-5 text-[#ECEDF3] relative"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header */}
             <div className="flex items-start justify-between">
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-lg bg-teal-accent/20 border border-teal-accent/30 flex items-center justify-center">
-                    <Sparks className="w-4 h-4 text-teal-accent" />
+                    <Sparkles className="w-4 h-4 text-teal-accent" />
                   </div>
                   <h3 className="font-heading text-lg font-bold">Create New Report</h3>
                 </div>
@@ -403,7 +505,6 @@ function App() {
               </button>
             </div>
 
-            {/* Input Form */}
             <form onSubmit={handleCreateReport} className="space-y-4">
               <div className="space-y-1.5">
                 <label className="text-xs font-mono text-white/70 uppercase tracking-wider">
@@ -424,7 +525,6 @@ function App() {
                 )}
               </div>
 
-              {/* Actions */}
               <div className="flex items-center justify-end gap-3 pt-2">
                 <button
                   type="button"
@@ -454,17 +554,16 @@ function App() {
         <div className="fixed top-0 left-0 right-0 z-40 bg-[#171A25]/90 backdrop-blur-md border-b border-white/10 px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-teal-accent/20 border border-teal-accent/30 flex items-center justify-center">
-              <Sparks className="w-4 h-4 text-teal-accent" />
+              <Sparkles className="w-4 h-4 text-teal-accent" />
             </div>
             <div className="space-y-1">
               <h3 className="font-heading text-lg font-bold text-white">Preview Mode</h3>
-              <p className="text-xs text-white/60 font-mono">Sample {previewData.title.split(' & ')[0]} Template</p>
+              <p className="text-xs text-white/60 font-mono">Sample {previewData?.title?.split(' & ')?.[0] || 'Template'}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={() => {
-                // Create new workspace with preview data
                 const newWs = {
                   id: `workspace-${Date.now()}`,
                   name: previewData.title,
@@ -472,7 +571,7 @@ function App() {
                   data: previewData,
                   messages: []
                 };
-                setWorkspaces(prev => [newWs, ...prev]);
+                setWorkspaces(prev => [newWs, ...(prev || [])]);
                 setActiveWorkspaceId(newWs.id);
                 setPreviewMode(false);
                 setPreviewData(null);
@@ -509,14 +608,14 @@ function App() {
             </div>
             <div className="space-y-1">
               <h3 className="font-heading text-lg font-bold text-white">Analysis Error</h3>
-              <p className="text-xs text-white/60 font-mono">Please check your input and try again</p>
+              <p className="text-xs text-white/60 font-mono">{analysisError}</p>
             </div>
           </div>
           <button
             onClick={() => setAnalysisError(null)}
             className="px-4 py-2 rounded-xl text-sm text-white/60 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
           >
-            ✕
+            <X className="w-4 h-4" />
           </button>
         </div>
       )}
@@ -534,15 +633,13 @@ function App() {
       {/* LEFT SIDEBAR */}
       <aside className="w-64 flex-shrink-0 h-screen flex flex-col border-r border-white/10 bg-obsidian-light/50 backdrop-blur-md transition-all duration-300">
 
-        {/* Header */}
         <div className="p-4 flex items-center gap-3">
           <div className="relative flex items-center justify-center w-8 h-8 rounded-lg bg-teal-accent/20 border border-teal-accent/30">
-            <Sparks className="w-4 h-4 text-teal-accent animate-pulse" />
+            <Sparkles className="w-4 h-4 text-teal-accent animate-pulse" />
           </div>
           <span className="font-heading font-bold text-xl tracking-tight">InsightFlow</span>
         </div>
 
-        {/* New Report Action */}
         <div className="px-4 py-2">
           <button
             onClick={() => setIsNewReportModalOpen(true)}
@@ -553,9 +650,8 @@ function App() {
           </button>
         </div>
 
-        {/* Workspaces List */}
         <div className="flex-1 overflow-y-auto px-3 py-4 space-y-6 scrollbar-hide">
-          {workspaces.length === 0 ? (
+          {(workspaces || []).length === 0 ? (
             <div className="text-[#6C7086] text-xs font-mono text-center py-8 px-4 flex flex-col items-center justify-center gap-1">
               <MessageSquare className="w-5 h-5 text-[#6C7086]/40 mb-1" />
               <span className="font-medium text-white/60">No past reports yet</span>
@@ -567,16 +663,16 @@ function App() {
                 <Clock className="w-3 h-3" /> Workspaces ({workspaces.length})
               </h3>
               <ul className="space-y-1">
-                {workspaces.map((ws) => (
-                  <li key={ws.id}>
+                {(workspaces || []).map((ws) => (
+                  <li key={ws?.id}>
                     <button
-                      onClick={() => handleSelectWorkspace(ws.id)}
+                      onClick={() => handleSelectWorkspace(ws?.id)}
                       className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-sm transition-colors text-left cursor-pointer ${
-                        !previewMode && activeWorkspaceId === ws.id ? 'bg-white/10 text-white font-medium border border-white/10' : 'text-white/80 hover:bg-white/5 hover:text-white'
+                        !previewMode && activeWorkspaceId === ws?.id ? 'bg-white/10 text-white font-medium border border-white/10' : 'text-white/80 hover:bg-white/5 hover:text-white'
                       }`}
                     >
                       <MessageSquare className="w-3.5 h-3.5 text-teal-accent flex-shrink-0" />
-                      <span className="truncate flex-1">{ws.name}</span>
+                      <span className="truncate flex-1">{ws?.name}</span>
                     </button>
                   </li>
                 ))}
@@ -585,7 +681,6 @@ function App() {
           )}
         </div>
 
-        {/* Bottom User / Settings */}
         <div className="p-4 border-t border-white/10 space-y-3">
           <div className="flex items-center justify-between bg-black/20 rounded-lg p-2 border border-white/5 cursor-pointer hover:bg-black/30 transition-colors">
             <div className="flex items-center gap-2">
@@ -599,7 +694,7 @@ function App() {
           <div className="flex items-center justify-between text-xs px-1">
             <span className="text-white/40 flex items-center gap-1">
               <span className="w-2 h-2 rounded-full bg-teal-accent animate-pulse"></span>
-              Gemini 2.0 Flash Active
+              Gemini 3.6 Flash Active
             </span>
             <ChevronDown className="w-3 h-3 text-white/40" />
           </div>
@@ -626,418 +721,201 @@ function App() {
           </div>
         )}
 
-        {/* MAIN CONTENT CONTAINER - Flex-1 for vertical centering */}
-        <div className="flex-1 min-h-0 w-full overflow-y-auto px-6 py-6 relative">
+        {/* MAIN CONTENT CONTAINER */}
+        <div className="flex-1 min-h-0 w-full overflow-y-auto px-6 py-6 pb-48 scrollbar-hide relative">
 
-          {/* LOADING STATE - Centered in available space */}
+          {/* LOADING STATE */}
           {isLoading && (
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="relative max-w-6xl w-full space-y-4">
-                {/* Loading content */}
-                <div className="relative w-16 h-16 flex items-center justify-center">
-                  <div className="absolute inset-0 rounded-full border-2 border-teal-accent/20 border-t-teal-accent animate-spin"></div>
-                  <Loader2 className="w-8 h-8 text-teal-accent animate-pulse" />
-                </div>
-                <div className="text-center space-y-1">
-                  <h3 className="font-heading text-lg font-bold text-white">Synthesizing Intelligence...</h3>
-                  <p className="text-xs text-white/50 font-mono">Running Gemini 2.0 Flash multimodal analysis & anomaly detection</p>
+            <div className="flex flex-col items-center justify-center min-h-[60vh] w-full text-center space-y-4 py-12">
+              <div className="relative w-16 h-16 flex items-center justify-center">
+                <div className="absolute inset-0 rounded-full border-2 border-teal-accent/20 border-t-teal-accent animate-spin"></div>
+                <Loader2 className="w-8 h-8 text-teal-accent animate-pulse" />
+              </div>
+              <div className="text-center space-y-1">
+                <h3 className="font-heading text-lg font-bold text-white">Synthesizing Intelligence...</h3>
+                <p className="text-xs text-white/50 font-mono">Running Gemini 3.6 Flash multimodal analysis & anomaly detection</p>
 
-                  {/* Show what's being analyzed */}
-                  {analyzingFiles.length > 0 && (
-                    <div className="mt-4 text-xs text-white/40 font-mono text-center">
-                      Analyzing {analyzingFiles.length} file{analyzingFiles.length !== 1 ? 's' : ''}:
-                      <div className="mt-1 flex flex-wrap gap-1 justify-center">
-                        {analyzingFiles.map((file, idx) => (
-                          <span key={idx} className="bg-white/10 px-2 py-1 rounded text-xs">{file.name}</span>
-                        ))}
-                      </div>
+                {analyzingFiles.length > 0 && (
+                  <div className="mt-4 text-xs text-white/40 font-mono text-center">
+                    Analyzing {analyzingFiles.length} file{analyzingFiles.length !== 1 ? 's' : ''}:
+                    <div className="mt-1 flex flex-wrap gap-1 justify-center">
+                      {analyzingFiles.map((file, idx) => (
+                        <span key={idx} className="bg-white/10 px-2 py-1 rounded text-xs">{file.name}</span>
+                      ))}
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
-          {/* ZERO-STATE / HERO VIEW - Vertically centered in available space */}
+
+          {/* ZERO-STATE / HERO VIEW */}
           {!currentReportToDisplay && !isLoading && (
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="relative max-w-6xl w-full space-y-8">
-                {/* Workspace Pill */}
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-teal-accent/10 border border-teal-accent/20 text-teal-accent text-xs font-mono mb-8">
-                  <Sparks className="w-3.5 h-3.5" />
-                  {activeWorkspace ? `Workspace: ${activeWorkspace.name}` : 'AI Decision Intelligence Canvas'}
-                </div>
-                <h1 className="text-4xl md:text-5xl font-heading font-extrabold tracking-tight text-white leading-tight mb-6 text-center">
-                  Point it at your mess. <br />
-                  <span className="bg-gradient-to-r from-teal-accent via-teal-300 to-violet-accent bg-clip-text text-transparent">
-                    Get a report, not a spreadsheet.
-                  </span>
-                </h1>
-                <p className="text-white/60 text-base font-body max-w-xl mx-auto leading-relaxed mb-6 text-center">
-                  Upload raw data, screenshots, or voice notes. InsightFlow synthesizes the noise into actionable insights.
-                </p>
-
-                {/* 4 Interactive Domain Template Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 w-full">
-                  {[
-                    { key: 'retail', title: 'Retail & E-commerce', desc: 'SKU stockouts, seasonal revenue dips & regional performance.', icon: TrendingUp, color: 'teal' },
-                    { key: 'saas', title: 'SaaS Metrics', desc: 'ARR trajectory, NRR benchmarks, CAC payback & churn risks.', icon: BarChart, color: 'violet' },
-                    { key: 'restaurant', title: 'Restaurant Ops', desc: 'COGS food cost spikes, prime cost loss & wastage alerts.', icon: AlertCircle, color: 'coral' },
-                    { key: 'budget', title: 'Event / Budget', desc: 'Variance tracking, departmental spend & surplus analysis.', icon: FileSpreadsheet, color: 'teal' },
-                  ].map((preset) => {
-                    const IconComp = preset.icon;
-                    return (
-                      <div
-                        key={preset.key}
-                        onClick={() => {
-                          setPreviewMode(true);
-                          setPreviewData(REPORTS_DATA[preset.key]);
-                          setFiles([]);
-                          setInputText('');
-                          setAnalysisError(null);
-                        }}
-                        className="group relative bg-[#171A25]/60 hover:bg-[#171A25] border border-white/10 hover:border-teal-accent/40 rounded-2xl p-5 transition-all duration-300 hover:scale-[1.02] hover:shadow-[0_0_25px_rgba(63,199,181,0.15)] cursor-pointer flex flex-col justify-between"
-                      >
-                        <div className="space-y-3">
-                          <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center group-hover:border-teal-accent/40 group-hover:border-teal-accent/10 transition-colors">
-                            <IconComp className="w-5 h-5 text-white/80 group-hover:text-teal-accent transition-colors" />
-                          </div>
-                          <h3 className="font-heading font-bold text-base text-white group-hover:text-teal-accent transition-colors">
-                            {preset.title}
-                          </h3>
-                          <p className="text-xs text-white/50 group-hover:text-white/70 transition-colors leading-relaxed">
-                            {preset.desc}
-                          </p>
-                        </div>
-                        <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between text-[11px] text-white/40 font-mono group-hover:text-teal-accent">
-                          <span>Load Template</span>
-                          <span>→</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
+            <EmptyWorkspaceHero
+              activeWorkspace={activeWorkspace}
+              onSelectPreset={handleSelectPreset}
+            />
           )}
-          {/* PREVIEW MODE VIEW - Vertically centered in available space */}
-          {previewMode && previewData && !isLoading && (
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="relative max-w-6xl w-full space-y-12">
 
-                {/* Preview Mode Header Banner */}
-                <div className="fixed top-0 left-0 right-0 z-40 bg-[#171A25]/90 backdrop-blur-md border-b border-white/10 px-6 py-4 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-lg bg-teal-accent/20 border border-teal-accent/30 flex items-center justify-center">
-                      <Sparks className="w-4 h-4 text-teal-accent" />
-                    </div>
-                    <div className="space-y-1">
-                      <h3 className="font-heading text-lg font-bold text-white">Preview Mode</h3>
-                      <p className="text-xs text-white/60 font-mono">Sample {previewData.title.split(' & ')[0]} Template</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => {
-                        // Create new workspace with preview data
-                        const newWs = {
-                          id: `workspace-${Date.now()}`,
-                          name: previewData.title,
-                          createdAt: new Date().toISOString(),
-                          data: previewData,
-                          messages: []
-                        };
-                        setWorkspaces(prev => [newWs, ...prev]);
-                        setActiveWorkspaceId(newWs.id);
-                        setPreviewMode(false);
-                        setPreviewData(null);
-                        setFiles([]);
-                        setInputText('');
-                        setAnalysisError(null);
-                      }}
-                      className="px-4 py-2 rounded-xl text-sm font-medium bg-teal-accent text-obsidian shadow-[0_0_15px_rgba(63,199,181,0.3)] hover:shadow-[0_0_20px_rgba(63,199,181,0.5)] transition-all cursor-pointer"
-                    >
-                      Use this template
-                    </button>
-                    <button
-                      onClick={() => {
-                        setPreviewMode(false);
-                        setPreviewData(null);
-                        setFiles([]);
-                        setInputText('');
-                        setAnalysisError(null);
-                      }}
-                      className="px-4 py-2 rounded-xl text-sm text-white/60 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
-                    >
-                      Exit Preview
-                    </button>
-                  </div>
-                </div>
-
-                {/* Executive Summary Banner */}
-                <div className="bg-gradient-to-r from-[#171A25] via-[#1C2030] to-[#171A25] border border-white/10 rounded-2xl p-6 shadow-xl relative overflow-hidden mt-12">
-                  <div className="absolute top-0 right-0 w-96 h-96 bg-teal-accent/5 rounded-full blur-3xl pointer-events-none"></div>
-
-                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-10">
-                    <div className="space-y-2">
-                      <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-teal-accent/10 border border-teal-accent/20 text-teal-accent text-xs font-mono">
-                        <Sparks className="w-3 h-3" /> Executive Brief
-                      </div>
-                      <h2 className="text-2xl font-heading font-bold">{previewData.title}</h2>
-                      <p className="text-white/60 text-sm leading-relaxed max-w-3xl">
-                        {previewData.summary}
-                      </p>
-                    </div>
-                    <div className="flex gap-4">
-                      {(previewData.metrics || []).map((metric, idx) => (
-                        <div
-                          key={`metric-${idx}-${metric.label || ''}`}
-                          className={`border rounded-xl p-4 min-w-[140px] ${
-                            metric.isPositive
-                              ? 'bg-white/5 border-white/10'
-                              : 'bg-coral-accent/10 border-coral-accent/20'
-                          }`}
-                        >
-                          <div className={`text-xs mb-1 font-mono ${metric.isPositive ? 'text-white/50' : 'text-coral-accent/80'}`}>
-                            {metric.label}
-                          </div>
-                          <div className="text-2xl font-heading font-bold">{metric.value}</div>
-                          <div className={`text-xs font-mono ${metric.isPositive ? 'text-teal-accent' : 'text-coral-accent'}`}>
-                            {metric.change}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Dynamic Recharts Grid */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-
-                  {/* Bar Chart Card */}
-                  <div className="bg-[#171A25]/80 border border-white/10 rounded-2xl p-5 shadow-lg space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h3 className="font-heading font-bold text-base flex items-center gap-2">
-                        <FileSpreadsheet className="w-4 h-4 text-violet-accent" />
-                        {previewData?.charts?.[0]?.title || 'Distribution Breakdown'}
-                      </h3>
-                      <Maximize2 className="w-4 h-4 text-white/30 hover:text-white transition-colors cursor-pointer" />
-                    </div>
-                    <div className="h-64 w-full">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={previewData?.charts?.[0]?.data || []}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
-                          <XAxis dataKey="name" stroke="#ffffff40" tick={{ fill: '#ffffff60', fontSize: 12 }} />
-                          <YAxis stroke="#ffffff40" tick={{ fill: '#ffffff60', fontSize: 12 }} />
-                          <RechartsTooltip
-                            contentStyle={{ backgroundColor: '#171A25', borderColor: '#ffffff20', borderRadius: '12px', color: '#fff' }}
-                          />
-                          <Bar dataKey="value" fill="#9C8CFF" radius={[4, 4, 0, 0]} />
-                          {previewData?.charts?.[0]?.data?.[0]?.secondaryValue !== undefined && (
-                            <Bar dataKey="secondaryValue" fill="#3FC7B5" radius={[4, 4, 0, 0]} />
-                          )}
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </div>
-
-                  {/* Line Chart Card */}
-                  <div className="bg-[#171A25]/80 border border-white/10 rounded-2xl p-5 shadow-lg space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h3 className="font-heading font-bold text-base flex items-center gap-2">
-                        <TrendingUp className="w-4 h-4 text-teal-accent" />
-                        {previewData?.charts?.[1]?.title || 'Trajectory Trends'}
-                      </h3>
-                      <Maximize2 className="w-4 h-4 text-white/30 hover:text-white transition-colors cursor-pointer" />
-                    </div>
-                    <div className="h-64 w-full">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={previewData?.charts?.[1]?.data || []}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
-                          <XAxis dataKey="name" stroke="#ffffff40" tick={{ fill: '#ffffff60', fontSize: 12 }} />
-                          <YAxis stroke="#ffffff40" tick={{ fill: '#ffffff60', fontSize: 12 }} />
-                          <RechartsTooltip
-                            contentStyle={{ backgroundColor: '#171A25', borderColor: '#ffffff20', borderRadius: '12px', color: '#fff' }}
-                          />
-                          <Line type="monotone" dataKey="value" stroke="#3FC7B5" strokeWidth={2} dot={{ fill: '#3FC7B5' }} />
-                        </LineChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Insights / Anomaly Callouts */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
-                  {(previewData.anomalies || []).map((anomaly, idx) => {
-                    const isWarning = anomaly.severity === 'high' || anomaly.severity === 'medium' || anomaly.isWarning;
-                    return (
-                      <div
-                        key={`anomaly-${idx}-${anomaly.driver || ''}`}
-                        className={`border rounded-xl p-5 relative overflow-hidden group bg-gradient-to-br ${
-                          isWarning
-                            ? 'from-coral-accent/10 to-transparent border-coral-accent/20'
-                            : 'from-violet-accent/10 to-transparent border-violet-accent/20'
-                        }`}
-                      >
-                        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                          {isWarning ? <AlertCircle className="w-16 h-16 text-coral-accent" /> : <TrendingUp className="w-16 h-16 text-violet-accent" />}
-                        </div>
-                        <div className="relative z-10">
-                          <div className={`text-xs font-mono mb-2 inline-block px-2 py-1 rounded ${
-                            isWarning ? 'bg-coral-accent/20 text-coral-accent' : 'bg-violet-accent/20 text-violet-accent'
-                          }`}>
-                            {anomaly.driver || 'Anomaly Callout'}
-                          </div>
-                          <p className="text-sm font-body text-white/80 leading-relaxed mb-4">
-                            {anomaly.description}
-                          </p>
-                          <div className="flex items-center justify-between text-xs font-mono pt-3 border-t border-white/10 text-white/50">
-                            <span>{anomaly.actionableStep}</span>
-                            <span className={isWarning ? 'text-coral-accent' : 'text-violet-accent'}>
-                              {anomaly.estImpact}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          )}
-          {/* ACTIVE REPORT DASHBOARD VIEW - Normal flow */}
+          {/* ACTIVE REPORT DASHBOARD VIEW */}
           {currentReportToDisplay && !isLoading && (
-            <div className="relative w-full">
-              <div className="space-y-8 animate-in fade-in duration-300">
+            <div className="space-y-8 animate-in fade-in duration-300">
 
-                {/* Executive Summary Banner */}
-                <div className="bg-gradient-to-r from-[#171A25] via-[#1C2030] to-[#171A25] border border-white/10 rounded-2xl p-6 shadow-xl relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-96 h-96 bg-teal-accent/5 rounded-full blur-3xl pointer-events-none"></div>
+              {/* Executive Summary Banner */}
+              <div className="bg-gradient-to-r from-[#171A25] via-[#1C2030] to-[#171A25] border border-white/10 rounded-2xl p-6 shadow-xl relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-96 h-96 bg-teal-accent/5 rounded-full blur-3xl pointer-events-none"></div>
 
-                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-10">
-                    <div className="space-y-2">
-                      <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-teal-accent/10 border border-teal-accent/20 text-teal-accent text-xs font-mono">
-                        <Sparkles className="w-3 h-3" /> Executive Brief
-                      </div>
-                      <h2 className="text-2xl font-heading font-bold">{currentReportToDisplay.title}</h2>
-                      <p className="text-white/60 text-sm leading-relaxed max-w-3xl">
-                        {currentReportToDisplay.summary}
-                      </p>
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-10">
+                  <div className="space-y-2">
+                    <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-teal-accent/10 border border-teal-accent/20 text-teal-accent text-xs font-mono">
+                      <Sparkles className="w-3 h-3" /> Executive Brief
                     </div>
-                    <div className="flex gap-4">
-                      {(currentReportToDisplay.metrics || []).map((metric, idx) => (
-                        <div
-                          key={`metric-${idx}-${metric.label || ''}`}
-                          className={`border rounded-xl p-4 min-w-[140px] ${
-                            metric.isPositive
-                              ? 'bg-white/5 border-white/10'
-                              : 'bg-coral-accent/10 border-coral-accent/20'
-                          }`}
-                        >
-                          <div className={`text-xs mb-1 font-mono ${metric.isPositive ? 'text-white/50' : 'text-coral-accent/80'}`}>
-                            {metric.label}
-                          </div>
-                          <div className="text-2xl font-heading font-bold">{metric.value}</div>
-                          <div className={`text-xs font-mono ${metric.isPositive ? 'text-teal-accent' : 'text-coral-accent'}`}>
-                            {metric.change}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                    <h2 className="text-2xl font-heading font-bold">{currentReportToDisplay?.title || 'Dataset Analysis'}</h2>
+                    <p className="text-white/60 text-sm leading-relaxed max-w-3xl">
+                      {currentReportToDisplay?.summary || 'No summary available.'}
+                    </p>
                   </div>
-                </div>
-
-                {/* Dynamic Recharts Grid */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-                  {/* Bar Chart Card */}
-                  <div className="bg-[#171A25]/80 border border-white/10 rounded-2xl p-5 shadow-lg space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h3 className="font-heading font-bold text-base flex items-center gap-2">
-                        <FileSpreadsheet className="w-4 h-4 text-violet-accent" />
-                        {currentReportToDisplay?.charts?.[0]?.title || 'Distribution Breakdown'}
-                      </h3>
-                      <Maximize2 className="w-4 h-4 text-white/30 hover:text-white transition-colors cursor-pointer" />
-                    </div>
-                    <div className="h-64 w-full">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={currentReportToDisplay?.charts?.[0]?.data || []}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
-                          <XAxis dataKey="name" stroke="#ffffff40" tick={{ fill: '#ffffff60', fontSize: 12 }} />
-                          <YAxis stroke="#ffffff40" tick={{ fill: '#ffffff60', fontSize: 12 }} />
-                          <RechartsTooltip
-                            contentStyle={{ backgroundColor: '#171A25', borderColor: '#ffffff20', borderRadius: '12px', color: '#fff' }}
-                          />
-                          <Bar dataKey="value" fill="#9C8CFF" radius={[4, 4, 0, 0]} />
-                          {currentReportToDisplay?.charts?.[0]?.data?.[0]?.secondaryValue !== undefined && (
-                            <Bar dataKey="secondaryValue" fill="#3FC7B5" radius={[4, 4, 0, 0]} />
-                          )}
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </div>
-
-                  {/* Line Chart Card */}
-                  <div className="bg-[#171A25]/80 border border-white/10 rounded-2xl p-5 shadow-lg space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h3 className="font-heading font-bold text-base flex items-center gap-2">
-                        <TrendingUp className="w-4 h-4 text-teal-accent" />
-                        {currentReportToDisplay?.charts?.[1]?.title || 'Trajectory Trends'}
-                      </h3>
-                      <Maximize2 className="w-4 h-4 text-white/30 hover:text-white transition-colors cursor-pointer" />
-                    </div>
-                    <div className="h-64 w-full">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <LineChart data={currentReportToDisplay?.charts?.[1]?.data || []}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
-                          <XAxis dataKey="name" stroke="#ffffff40" tick={{ fill: '#ffffff60', fontSize: 12 }} />
-                          <YAxis stroke="#ffffff40" tick={{ fill: '#ffffff60', fontSize: 12 }} />
-                          <RechartsTooltip
-                            contentStyle={{ backgroundColor: '#171A25', borderColor: '#ffffff20', borderRadius: '12px', color: '#fff' }}
-                          />
-                          <Line type="monotone" dataKey="value" stroke="#3FC7B5" strokeWidth={2} dot={{ fill: '#3FC7B5' }} />
-                        </LineChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Insights / Anomaly Callouts */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {(currentReportToDisplay.anomalies || []).map((anomaly, idx) => {
-                    const isWarning = anomaly.severity === 'high' || anomaly.severity === 'medium' || anomaly.isWarning;
-                    return (
+                  <div className="flex gap-4 flex-wrap">
+                    {(currentReportToDisplay?.metrics || []).map((metric, idx) => (
                       <div
-                        key={`anomaly-${idx}-${anomaly.driver || ''}`}
-                        className={`border rounded-xl p-5 relative overflow-hidden group bg-gradient-to-br ${
-                          isWarning
-                            ? 'from-coral-accent/10 to-transparent border-coral-accent/20'
-                            : 'from-violet-accent/10 to-transparent border-violet-accent/20'
+                        key={`metric-${idx}-${metric?.label || ''}`}
+                        className={`border rounded-xl p-4 min-w-[140px] ${
+                          metric?.isPositive
+                            ? 'bg-white/5 border-white/10'
+                            : 'bg-coral-accent/10 border-coral-accent/20'
                         }`}
                       >
-                        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                          {isWarning ? <AlertCircle className="w-16 h-16 text-coral-accent" /> : <TrendingUp className="w-16 h-16 text-violet-accent" />}
+                        <div className={`text-xs mb-1 font-mono ${metric?.isPositive ? 'text-white/50' : 'text-coral-accent/80'}`}>
+                          {metric?.label}
                         </div>
-                        <div className="relative z-10">
-                          <div className={`text-xs font-mono mb-2 inline-block px-2 py-1 rounded ${
-                            isWarning ? 'bg-coral-accent/20 text-coral-accent' : 'bg-violet-accent/20 text-violet-accent'
-                          }`}>
-                            {anomaly.driver || 'Anomaly Callout'}
-                          </div>
-                          <p className="text-sm font-body text-white/80 leading-relaxed mb-4">
-                            {anomaly.description}
-                          </p>
-                          <div className="flex items-center justify-between text-xs font-mono pt-3 border-t border-white/10 text-white/50">
-                            <span>{anomaly.actionableStep}</span>
-                            <span className={isWarning ? 'text-coral-accent' : 'text-violet-accent'}>
-                              {anomaly.estImpact}
-                            </span>
-                          </div>
+                        <div className="text-2xl font-heading font-bold">{metric?.value}</div>
+                        <div className={`text-xs font-mono ${metric?.isPositive ? 'text-teal-accent' : 'text-coral-accent'}`}>
+                          {metric?.change}
                         </div>
                       </div>
-                    );
-                  })}
+                    ))}
+                  </div>
                 </div>
               </div>
+
+              {/* Dynamic Recharts Grid */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+                {/* Bar Chart Card */}
+                <div className="bg-[#171A25]/80 border border-white/10 rounded-2xl p-5 shadow-lg space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-heading font-bold text-base flex items-center gap-2">
+                      <FileSpreadsheet className="w-4 h-4 text-violet-accent" />
+                      {currentReportToDisplay?.charts?.[0]?.title || 'Distribution Breakdown'}
+                    </h3>
+                    <Maximize2 className="w-4 h-4 text-white/30 hover:text-white transition-colors cursor-pointer" />
+                  </div>
+                  <div className="h-64 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={currentReportToDisplay?.charts?.[0]?.data || []}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
+                        <XAxis dataKey="name" stroke="#ffffff40" tick={{ fill: '#ffffff60', fontSize: 12 }} />
+                        <YAxis stroke="#ffffff40" tick={{ fill: '#ffffff60', fontSize: 12 }} />
+                        <RechartsTooltip
+                          contentStyle={{ backgroundColor: '#171A25', borderColor: '#ffffff20', borderRadius: '12px', color: '#fff' }}
+                        />
+                        <Bar dataKey="value" fill="#9C8CFF" radius={[4, 4, 0, 0]} />
+                        {currentReportToDisplay?.charts?.[0]?.data?.[0]?.secondaryValue !== undefined && (
+                          <Bar dataKey="secondaryValue" fill="#3FC7B5" radius={[4, 4, 0, 0]} />
+                        )}
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* Line Chart Card */}
+                <div className="bg-[#171A25]/80 border border-white/10 rounded-2xl p-5 shadow-lg space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-heading font-bold text-base flex items-center gap-2">
+                      <TrendingUp className="w-4 h-4 text-teal-accent" />
+                      {currentReportToDisplay?.charts?.[1]?.title || 'Trajectory Trends'}
+                    </h3>
+                    <Maximize2 className="w-4 h-4 text-white/30 hover:text-white transition-colors cursor-pointer" />
+                  </div>
+                  <div className="h-64 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={currentReportToDisplay?.charts?.[1]?.data || []}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
+                        <XAxis dataKey="name" stroke="#ffffff40" tick={{ fill: '#ffffff60', fontSize: 12 }} />
+                        <YAxis stroke="#ffffff40" tick={{ fill: '#ffffff60', fontSize: 12 }} />
+                        <RechartsTooltip
+                          contentStyle={{ backgroundColor: '#171A25', borderColor: '#ffffff20', borderRadius: '12px', color: '#fff' }}
+                        />
+                        <Line type="monotone" dataKey="value" stroke="#3FC7B5" strokeWidth={2} dot={{ fill: '#3FC7B5' }} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              </div>
+
+              {/* Insights / Anomaly Callouts */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {(currentReportToDisplay?.anomalies || []).map((anomaly, idx) => {
+                  const isWarning = anomaly?.severity === 'high' || anomaly?.severity === 'medium' || anomaly?.isWarning;
+                  return (
+                    <div
+                      key={`anomaly-${idx}-${anomaly?.driver || ''}`}
+                      className={`border rounded-xl p-5 relative overflow-hidden group bg-gradient-to-br ${
+                        isWarning
+                          ? 'from-coral-accent/10 to-transparent border-coral-accent/20'
+                          : 'from-violet-accent/10 to-transparent border-violet-accent/20'
+                      }`}
+                    >
+                      <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                        {isWarning ? <AlertCircle className="w-16 h-16 text-coral-accent" /> : <TrendingUp className="w-16 h-16 text-violet-accent" />}
+                      </div>
+                      <div className="relative z-10">
+                        <div className={`text-xs font-mono mb-2 inline-block px-2 py-1 rounded ${
+                          isWarning ? 'bg-coral-accent/20 text-coral-accent' : 'bg-violet-accent/20 text-violet-accent'
+                        }`}>
+                          {anomaly?.driver || 'Anomaly Callout'}
+                        </div>
+                        <p className="text-sm font-body text-white/80 leading-relaxed mb-4">
+                          {anomaly?.description}
+                        </p>
+                        <div className="flex items-center justify-between text-xs font-mono pt-3 border-t border-white/10 text-white/50">
+                          <span>{anomaly?.actionableStep}</span>
+                          <span className={isWarning ? 'text-coral-accent' : 'text-violet-accent'}>
+                            {anomaly?.estImpact}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Follow-Up Q&A Thread */}
+              {!previewMode && activeWorkspace?.messages && activeWorkspace.messages.length > 0 && (
+                <div className="bg-[#171A25]/90 border border-white/10 rounded-2xl p-6 shadow-xl space-y-4">
+                  <h3 className="font-heading font-bold text-base text-white flex items-center gap-2">
+                    <MessageSquare className="w-4 h-4 text-teal-accent" /> Report Follow-Up & Insights Thread
+                  </h3>
+                  <div className="space-y-3">
+                    {activeWorkspace.messages.map((msg, idx) => (
+                      <div
+                        key={`msg-${idx}`}
+                        className={`p-4 rounded-xl text-sm leading-relaxed ${
+                          msg?.role === 'user'
+                            ? 'bg-white/5 border border-white/10 text-white font-medium self-end'
+                            : 'bg-teal-accent/10 border border-teal-accent/20 text-white/90 font-body'
+                        }`}
+                      >
+                        <div className="text-[11px] font-mono mb-1 text-white/40 uppercase">
+                          {msg?.role === 'user' ? 'You' : 'InsightFlow AI Analyst'}
+                        </div>
+                        {msg?.content}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
             </div>
           )}
         </div>
@@ -1045,7 +923,6 @@ function App() {
         {/* BOTTOM FIXED OMNI-BAR */}
         <div className="sticky bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-obsidian via-obsidian/90 to-transparent z-30 pointer-events-none">
 
-          {/* Recommendation Chips Floating Above Bar */}
           <div className="max-w-3xl mx-auto mb-2 flex items-center gap-2 overflow-x-auto scrollbar-hide py-1 group/chips">
             {["Why did West sales drop?", "Show monthly profit trend", "Simulate 10% price increase"].map((q, idx) => (
               <button
@@ -1060,7 +937,6 @@ function App() {
 
           <div className="max-w-3xl w-full mx-auto bg-[#171A25]/90 backdrop-blur-xl border border-white/10 rounded-2xl p-3 shadow-2xl flex flex-col gap-2 pointer-events-auto focus-within:border-white/30 focus-within:ring-1 focus-within:ring-white/20 transition-all hover:shadow-[0_0_30px_rgba(63,199,181,0.1)]">
 
-            {/* File Chips Preview Area */}
             {files.length > 0 && (
               <div className="flex flex-wrap gap-2 pb-2 border-b border-white/10">
                 {files.map((file, idx) => (
@@ -1079,7 +955,6 @@ function App() {
               </div>
             )}
 
-            {/* Input Row */}
             <div className="flex items-center gap-3 w-full">
               <textarea
                 value={inputText}
@@ -1105,7 +980,6 @@ function App() {
                     className="p-2 hover:bg-white/10 rounded-lg text-white/50 hover:text-white transition-colors relative group cursor-pointer"
                   >
                     <Paperclip className="w-4 h-4" />
-                    {/* Tooltip */}
                     <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 bg-obsidian border border-white/10 text-xs rounded-md px-2 py-1 opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap transition-opacity">
                       CSV, XLSX, PDF, Images
                     </div>

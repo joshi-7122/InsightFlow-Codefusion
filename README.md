@@ -1,20 +1,28 @@
-# InsightFlow
+# InsightFlow - Codefusion
 
-InsightFlow is an AI Decision Analyst & Visual Dashboard Framework built with React, Vite, Tailwind CSS, and Recharts.
+Project repository layout for InsightFlow decision intelligence framework.
 
-## Getting Started
+## Project Structure
 
-### Installation
-```bash
-npm install
+```
+InsightFlow/
+├── frontend/     # React 19 + Vite + Tailwind CSS UI Framework
+└── backend/      # Backend pipeline (Reserved for integration)
 ```
 
-### Development
+## Frontend Setup
+
+To run the frontend application locally:
+
 ```bash
+cd frontend
+npm install
 npm run dev
 ```
 
-### Build
+### Build & Lint
 ```bash
+cd frontend
 npm run build
+npm run lint
 ```
